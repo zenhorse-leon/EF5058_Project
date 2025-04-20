@@ -1,0 +1,4 @@
+/data*
+/configs
+/.DS_Store
+*.pyc

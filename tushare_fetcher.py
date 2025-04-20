@@ -8,7 +8,7 @@ class TushareFetcher:
         self.limit = 6000
         self.limit_per_min = 200
 
-        self.index_list = ['000001.SH', '000300.SH']
+        self.index_list = ['000001.SH', '000300.SH', '399300.SZ']
         
     def get_stock_basic(self):
         """Get basic information of all stocks"""

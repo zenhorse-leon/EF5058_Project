@@ -16,8 +16,8 @@ stocks = df_stocks['code'].unique()
 # market, size, value, profitability, investment, momentum
 df_stocks['size'] = df_stocks['t_mv'] / 1e8
 df_stocks['value'] = 1. / df_stocks['t_pb'] # book to market
-df_stocks['profitability'] = df_stocks['npta'] # net profit to total assets
-df_stocks['investment'] = df_stocks['assets_yoy'] # total assets growth
+df_stocks['profitability'] = df_stocks['npta'] / 100 # net profit to total assets
+df_stocks['investment'] = df_stocks['assets_yoy'] / 100 # total assets growth
 
 
 df_factors = df_stocks[['code', 'name', 'date', 'return', 'size', 'value', 'profitability', 'investment', 'momentum']]

@@ -32,9 +32,9 @@ if not os.path.exists(factor_path):
     df_factors = df_factors.dropna()
     df_factors.to_csv('data_processed/stock_factors.csv', index=False, float_format='%.4f')
 
-else:
-    df_factors = pd.read_csv(factor_path)
-    df_factors['date'] = df_factors['date'].astype(str)
+
+df_factors = pd.read_csv(factor_path)
+df_factors['date'] = df_factors['date'].astype(str)
 
 
 def update_portfolio(portfolio_year, data):

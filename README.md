@@ -3,12 +3,12 @@
 
 ```
 # fetch data
-python data_fetch.py
+python 01_data_fetch.py
 
 # process data
-python data_process.py
+python 02_data_process.py
 
 # get factors
-python get_factor.py
+python 03_get_factor.py
 
 ```

@@ -1,4 +1,4 @@
-setwd("D:/桌面/5058/5058Group")
+setwd("/Users/liang/Documents/CityU/Courses/Asset Mgt & Hedge Fund Srtgc EF5058/project/RCode/")
 getwd()
 
 #(a)
@@ -7,7 +7,7 @@ getwd()
 library(readr)
 library(dplyr)
 library(lubridate)
-data <- read_csv("stock_factors_processed(2).csv")
+data <- read_csv("../data_processed/stock_factors_processed.csv")
 data <- data %>%
   mutate(date = ymd(as.character(date)),
          excess_ret = return - rf) %>%

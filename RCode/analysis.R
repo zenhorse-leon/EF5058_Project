@@ -1,6 +1,7 @@
 setwd("/Users/liang/Documents/CityU/Courses/Asset Mgt & Hedge Fund Srtgc EF5058/project/RCode/")
 getwd()
 
+
 #(a)
 
 # 1. 数据预处理：转换日期，计算超额收益
@@ -66,6 +67,7 @@ library(lmtest)
 library(broom)
 library(ggplot2)
 library(PerformanceAnalytics)
+library(tidyr)
 # 6. 计算策略累计收益
 portfolio <- portfolio %>%
   mutate(cum_return = cumprod(1 + strategy_return) - 1)
@@ -119,6 +121,8 @@ ggplot(returns_compare, aes(x = date)) +
   ) +
   theme_minimal() +
   scale_color_manual(values = c("Strategy Cumulative Return" = "blue", "Benchmark Cumulative Return" = "red"))
+
+write.csv(returns_compare, file = "returns_compare.csv", row.names = FALSE)
 
 # 计算绩效指标
 # 转换为xts对象方便用PerformanceAnalytics包
@@ -185,6 +189,8 @@ ggplot(net_returns, aes(x = date, y = cum_net_return, color = factor(freq))) +
        color = "Rebalance Frequency (months)") +
   theme_minimal()
 
+write.csv(net_returns, file = "net_returns_months.csv", row.names = FALSE)
+
 # 11. 绩效指标计算
 library(xts)
 
@@ -199,7 +205,7 @@ print(annualized_return)
 # === 计算等权重组合收益 ===
 library(dplyr)
 library(readr)
-returns <- read_csv("stock_factors_processed(2).csv")
+returns <- read_csv("../data_processed/stock_factors_processed.csv")
 returns <- returns %>%
   mutate(date = ymd(as.character(date)))
 
@@ -244,11 +250,27 @@ print(result)
 
 
 ## === 计算市值加权组合收益 ===
-market_weighted <- positions %>%
+library(dplyr)
+library(readr)
+library(lubridate)
+library(PerformanceAnalytics)
+library(xts)
+
+# 读取收益数据
+returns <- read_csv("../data_processed/stock_factors.csv") %>%
+  mutate(date = ymd(as.character(date)))
+
+# positions 数据假设已存在，包含 code, date, position, size（市值）
+positions_with_ret <- positions %>%
+  left_join(returns, by = c("code", "date")) %>%
+  mutate(ret_adj = return - rf)  # 超额收益
+
+# 计算市值加权组合收益
+market_weighted <- positions_with_ret %>%
   group_by(date, position) %>%
-  mutate(total_me = sum(me, na.rm = TRUE)) %>%
+  mutate(total_size = sum(size, na.rm = TRUE)) %>%   # 计算每个日期+仓位的市值总和
   ungroup() %>%
-  mutate(weight_mkt = me / total_me) %>%
+  mutate(weight_mkt = size / total_size) %>%         # 计算个股市值权重
   group_by(date) %>%
   summarise(
     ret_long_mkt = sum(ifelse(position == 1, weight_mkt * ret_adj, 0), na.rm = TRUE),
@@ -257,7 +279,30 @@ market_weighted <- positions %>%
   ) %>%
   arrange(date)
 
-# 合并两种权重收益对比
+print(market_weighted)
+
+# 转换为xts对象
+market_xts <- xts(market_weighted$ret_mkt, order.by = market_weighted$date)
+
+# 计算年化收益率（假设月度收益）
+annualized_return_mkt <- Return.annualized(market_xts, scale = 12)
+
+# 计算年化波动率
+annualized_vol_mkt <- StdDev.annualized(market_xts, scale = 12)
+
+# 计算夏普比率（假设无风险利率已剔除）
+sharpe_ratio_mkt <- annualized_return_mkt / annualized_vol_mkt
+
+# 整理输出结果
+result_mkt <- tibble(
+  Annualized_Return = as.numeric(annualized_return_mkt),
+  Annualized_Volatility = as.numeric(annualized_vol_mkt),
+  Sharpe_Ratio = as.numeric(sharpe_ratio_mkt)
+)
+
+print(result_mkt)
+
+#合并两种收益，计算累计收益
 combined_returns <- equal_weighted %>%
   select(date, ret_eq) %>%
   left_join(market_weighted %>% select(date, ret_mkt), by = "date") %>%
@@ -266,23 +311,11 @@ combined_returns <- equal_weighted %>%
     cum_ret_mkt = cumprod(1 + ret_mkt) - 1
   )
 
-# 画图比较
+# 绘图比较累计收益
 ggplot(combined_returns, aes(x = date)) +
   geom_line(aes(y = cum_ret_eq, color = "Equal Weight")) +
   geom_line(aes(y = cum_ret_mkt, color = "Market Cap Weight")) +
-  labs(title = "Momentum Strategy Cumulative Returns: Equal vs Market Cap Weight",
+  labs(title = "Cumulative Returns: Equal Weight vs Market Cap Weight",
        x = "Date", y = "Cumulative Return",
        color = "Weighting Method") +
   theme_minimal()
-
-# 计算绩效指标
-cat("Equal Weight Performance:\n")
-cat("Annualized Return:", round(Return.annualized(combined_returns$ret_eq) * 100, 2), "%\n")
-cat("Annualized Volatility:", round(StdDev.annualized(combined_returns$ret_eq) * 100, 2), "%\n")
-cat("Sharpe Ratio:", round(Return.annualized(combined_returns$ret_eq) / StdDev.annualized(combined_returns$ret_eq), 3), "\n\n")
-
-cat("Market Cap Weight Performance:\n")
-cat("Annualized Return:", round(Return.annualized(combined_returns$ret_mkt) * 100, 2), "%\n")
-cat("Annualized Volatility:", round(StdDev.annualized(combined_returns$ret_mkt) * 100, 2), "%\n")
-cat("Sharpe Ratio:", round(Return.annualized(combined_returns$ret_mkt) / StdDev.annualized(combined_returns$ret_mkt), 3), "\n")
-

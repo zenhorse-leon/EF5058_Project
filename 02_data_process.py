@@ -9,9 +9,6 @@ from dateutil.relativedelta import relativedelta
 out_month= 'data_month'
 if not os.path.exists(out_month):
     os.makedirs(out_month)
-out_dir = 'data_processed'
-if not os.path.exists(out_dir):
-    os.makedirs(out_dir)
 
 universe_path = './data/universe.csv'
 universe = pd.read_csv(universe_path).to_dict(orient='records')
@@ -25,6 +22,31 @@ print(len(dates))
 
 years = np.arange(2000, 2025)
 months = np.arange(1, 13)
+
+
+shibor_path = os.path.join('./data', 'shibor.csv')
+shibor_df = pd.read_csv(shibor_path)
+shibor_df['date'] = shibor_df['date'].astype(str)
+
+shibor_dict = []
+for year in years:
+    for month in months:
+        start_m = '%d%02d01' % (year, month)
+        end_m = '%d%02d31' % (year, month)
+        month_df = shibor_df[(shibor_df['date'] >= start_m) & (shibor_df['date'] <= end_m)]
+        if not month_df.empty:
+            shibor_month = np.mean(month_df['1y'].values[0]) / 100
+        else:
+            shibor_month = 3.5 / 100
+
+        shibor_dict.append({
+            'date': '%d%02d01' % (year, month),
+            'shibor': shibor_month,
+        })
+shibor_df_month = pd.DataFrame(shibor_dict)
+shibor_df_month = shibor_df_month.sort_values(by='date', ascending=True).dropna()
+shibor_df_month.to_csv(os.path.join(out_month, 'shibor_month.csv'), index=False, float_format='%.4f')
+
 
 fin_paths = glob(os.path.join('./data', '*_financial.csv'))
 fin_codes = []
@@ -65,11 +87,10 @@ for year in years:
             'date': '%d%02d01' % (year, month),
             'market_return_ann': market_return_ann,
             'market_return_month': return_month,
-            
         })
 market_df = pd.DataFrame(market_dict)
 market_df = market_df.sort_values(by='date', ascending=True).dropna()
-market_df.to_csv(os.path.join(out_dir, 'market_month.csv'), index=False, float_format='%.4f')
+market_df.to_csv(os.path.join(out_month, 'market_month.csv'), index=False, float_format='%.4f')
         
 
 
@@ -199,41 +220,7 @@ for stock in tqdm(universe, dynamic_ncols=True):
 
     df_combined_all = pd.concat([df_combined_all, df_combined], axis=0)
     
-df_combined_all.to_csv(os.path.join(out_dir, 'combined_all.csv'), index=False, float_format='%.4f')
+df_combined_all.to_csv(os.path.join(out_month, 'combined_all.csv'), index=False, float_format='%.4f')
 
     
-# def combine_all_horizontal(out_month):
-#     all_files = glob(os.path.join(out_month, '*_combined.csv'))
-#     combined_df = pd.DataFrame()
-    
-#     columns = ['code', 'close','t_mv','t_pb','t_pe','roe','roa','debt_to_assets','vol']
-
-#     df_list = {}
-#     universe = []
-#     for path in all_files:
-#         df = pd.read_csv(path)
-#         name = df['name'].values[0]
-#         universe.append(name)
-#         df = df.sort_values(by='date', ascending=True)
-#         df = df.set_index('date')
-#         df.index = pd.to_datetime(df.index, format='%Y%m%d')
-#         df_list[name] = df
-    
-
-#     combined_df = pd.DataFrame(index=df_list[universe[0]].index)
-#     multi_columns = pd.MultiIndex.from_product([universe, columns])
-
-    
-#     for code in universe:
-#         for col in columns:
-#             combined_df[(code, col)] = df_list[code][col]
-
-#     combined_df.columns = multi_columns
-    
-
-#     return combined_df
-
-# df = combine_all_horizontal(out_month)
-# df.to_csv(os.path.join(out_dir, 'combined_all_horizontal.csv'), index=True)
-
 

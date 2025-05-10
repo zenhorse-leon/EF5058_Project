@@ -27,7 +27,7 @@ if not os.path.exists(out_dir):
 df_int = pd.DataFrame()
 
 for year in years:
-    start_date = '%d0101' % year
+    start_dxate = '%d0101' % year
     end_date = '%d1231' % year
     df_year = tushare_fetcher.pro.shibor(start_date=start_date, end_date=end_date)
     df_int = pd.concat([df_int, df_year], axis=0)

@@ -1,6 +1,7 @@
-# stock_factor
+# EF5058_Project
 
 
+### Data
 ```
 # fetch data
 python 01_data_fetch.py
@@ -12,3 +13,7 @@ python 02_data_process.py
 python 03_get_factor.py
 
 ```
+
+
+### R 
+The code is in folder `RCode`.

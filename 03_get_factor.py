@@ -3,34 +3,42 @@ import os
 import numpy as np
 import copy
 
+
+out_dir = 'data_processed'
+if not os.path.exists(out_dir):
+    os.makedirs(out_dir)
+
 factor_path = 'data_processed/stock_factors.csv'
 
-if not os.path.exists(factor_path):
-    market_path = 'data_processed/market_month.csv'
-    stock_path = 'data_processed/combined_all.csv'
+market_path = 'data_month/market_month.csv'
+stock_path = 'data_month/combined_all.csv'
+
+df_market = pd.read_csv(market_path)
+df_stocks = pd.read_csv(stock_path)
+
+df_rf = pd.read_csv('data_month/shibor_month.csv')
+
+stocks = df_stocks['code'].unique()
+
+# factors:
+# market, size, value, profitability, investment, momentum
+df_stocks['size'] = df_stocks['t_mv'] / 1e8
+df_stocks['value'] = 1. / df_stocks['t_pb'] # book to market
+df_stocks['profitability'] = df_stocks['npta'] / 100 # net profit to total assets
+df_stocks['investment'] = df_stocks['assets_yoy'] / 100 # total assets growth
 
 
-    df_market = pd.read_csv(market_path)
-    df_stocks = pd.read_csv(stock_path)
+df_factors = df_stocks[['code', 'name', 'date', 'return', 'size', 'value', 'profitability', 'investment', 'momentum']]
 
-    stocks = df_stocks['code'].unique()
+df_factors = pd.merge(df_factors, df_market[['date', 'market_return_month']], on='date', how='left')
+df_factors.rename(columns={'market_return_month': 'market'}, inplace=True)
 
-    # factors:
-    # market, size, value, profitability, investment, momentum
-    df_stocks['size'] = df_stocks['t_mv'] / 1e8
-    df_stocks['value'] = 1. / df_stocks['t_pb'] # book to market
-    df_stocks['profitability'] = df_stocks['npta'] / 100 # net profit to total assets
-    df_stocks['investment'] = df_stocks['assets_yoy'] / 100 # total assets growth
+df_factors = pd.merge(df_factors, df_rf[['date', 'shibor']], on='date', how='left')
+df_factors.rename(columns={'shibor': 'rf'}, inplace=True)
 
 
-    df_factors = df_stocks[['code', 'name', 'date', 'return', 'size', 'value', 'profitability', 'investment', 'momentum']]
-
-    df_factors['market'] = df_factors['date'].apply(
-        lambda date: np.nan if date not in df_market['date'].values else df_market[df_market['date'] == date]['market_return_ann'].values[0]
-    )
-
-    df_factors = df_factors.dropna()
-    df_factors.to_csv('data_processed/stock_factors.csv', index=False, float_format='%.4f')
+df_factors = df_factors.dropna()
+df_factors.to_csv('data_processed/stock_factors.csv', index=False, float_format='%.4f')
 
 
 df_factors = pd.read_csv(factor_path)
@@ -65,7 +73,7 @@ def update_factors(portfolio_year, data):
     }
     cols = portfolio_year.keys()
 
-    data_new = data[['code', 'name', 'date', 'return', 'market']].copy()
+    data_new = data[['code', 'name', 'date', 'return', 'market', 'rf']].copy()
     for col in cols:
         top_codes = portfolio_year[col]['top']
         bot_codes = portfolio_year[col]['bot']
@@ -81,18 +89,17 @@ def update_factors(portfolio_year, data):
 years = np.arange(2000, 2025)
 months = np.arange(1, 13)
 
-portfolio_tmp = {'size': {'top': [], 'bot': [], 'ratio': 0.2, 'assending': True}, 
-              'value': {'top': [], 'bot': [], 'ratio': 0.2, 'assending': False}, 
-              'profitability': {'top': [], 'bot': [], 'ratio': 0.2, 'assending': False}, 
-              'investment': {'top': [], 'bot': [], 'ratio': 0.2, 'assending': False}, 
-              'momentum': {'top': [], 'bot': [], 'ratio': 0.2, 'assending': False}
+portfolio_tmp = {'size': {'top': [], 'bot': [], 'ratio': 0.5, 'assending': True}, 
+              'value': {'top': [], 'bot': [], 'ratio': 0.3, 'assending': False}, 
+              'profitability': {'top': [], 'bot': [], 'ratio': 0.3, 'assending': False}, 
+              'investment': {'top': [], 'bot': [], 'ratio': 0.3, 'assending': False}, 
+              'momentum': {'top': [], 'bot': [], 'ratio': 0.3, 'assending': False}
             }
 
 portfolios = {}
 
 df_factor_processed = pd.DataFrame()
 for year in years:
-    
     for month in months:
         if year == 2000 or (year == 2001 and month < 4):
             continue
@@ -110,5 +117,7 @@ for year in years:
         df_cal = update_factors(portfolios['latest'], df_sel)
         df_factor_processed = pd.concat([df_factor_processed, df_cal], axis=0, ignore_index=True)
 
-            
+
+
+
 df_factor_processed.to_csv('data_processed/stock_factors_processed.csv', index=False, float_format='%.6f')

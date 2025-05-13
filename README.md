@@ -1,7 +1,7 @@
 # EF5058_Project
-Authors:
-Xie Jiayi
-Wang Peiyu
+**Authors**: \
+Xie Jiayi \
+Wang Peiyu \
 WU Liang
 
 ### Data

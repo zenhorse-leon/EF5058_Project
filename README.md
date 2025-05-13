@@ -1,5 +1,8 @@
 # EF5058_Project
-
+Authors:
+Xie Jiayi
+Wang Peiyu
+WU Liang
 
 ### Data
 ```
@@ -16,4 +19,7 @@ python 03_get_factor.py
 
 
 ### R 
-The code is in folder `RCode`.
+The code is in folder `RCode` including `analysis.R` and `risk.R`.
+
+### Report
+The report is in folder `Report`.

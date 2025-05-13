@@ -1,4 +1,5 @@
-/data*
+/data
+/data_month
 /configs
 /.DS_Store
 *.pyc

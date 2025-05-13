@@ -1,109 +1,108 @@
 library(tidyverse)
 library(PerformanceAnalytics)
-library(quantmod)
+library(patchwork)
+library(gridExtra)
 
-# Load the data (assuming it's in a CSV file)
-data <- read_csv("returns_compare.csv") %>%
-  mutate(date = as.Date(date))
-
-# Calculate drawdowns
-calculate_drawdowns <- function(returns) {
+# High Water Mark Calculation
+calculate_hwm <- function(returns) {
   cum_ret <- cumprod(1 + returns)
-  max_cum_ret <- cummax(cum_ret)
-  drawdown <- (cum_ret - max_cum_ret) / max_cum_ret
-  return(drawdown)
+  hwm <- cummax(cum_ret)
+  return(hwm)
 }
 
-# Calculate for both strategy and benchmark
-data <- data %>%
+### PART 1: Strategy vs Benchmark Analysis ###
+data1 <- read_csv("returns_compare.csv") %>% mutate(date = as.Date(date))
+
+# Calculate metrics
+data1 <- data1 %>%
   mutate(
+    strategy_hwm = calculate_hwm(strategy_return),
+    benchmark_hwm = calculate_hwm(ret_benchmark),
     strategy_drawdown = calculate_drawdowns(strategy_return),
-    benchmark_drawdown = calculate_drawdowns(ret_benchmark)
+    benchmark_drawdown = calculate_drawdowns(ret_benchmark),
+    strategy_value = cumprod(1 + strategy_return),
+    benchmark_value = cumprod(1 + ret_benchmark)
   )
 
-# 1. Historical Drawdown Analysis
-max_drawdown_strategy <- min(data$strategy_drawdown)
-max_drawdown_benchmark <- min(data$benchmark_drawdown)
+# Create plots
+hwm_plot1 <- ggplot(data1, aes(x = date)) +
+  geom_line(aes(y = strategy_hwm, color = "Strategy HWM"), linetype = "dashed") +
+  geom_line(aes(y = strategy_value, color = "Strategy Value")) +
+  geom_line(aes(y = benchmark_hwm, color = "Benchmark HWM"), linetype = "dashed") +
+  geom_line(aes(y = benchmark_value, color = "Benchmark Value")) +
+  labs(title = "Strategy vs Benchmark High Water Marks", y = "Value") +
+  theme_minimal()
 
-cat("Maximum Strategy Drawdown:", round(max_drawdown_strategy*100, 2), "%\n")
-cat("Maximum Benchmark Drawdown:", round(max_drawdown_benchmark*100, 2), "%\n")
+drawdown_plot1 <- ggplot(data1, aes(x = date)) +
+  geom_line(aes(y = strategy_drawdown, color = "Strategy"), linewidth = 1) +
+  geom_line(aes(y = benchmark_drawdown, color = "Benchmark"), linewidth = 1) +
+  labs(title = "Strategy vs Benchmark Drawdowns", y = "Drawdown") +
+  scale_y_continuous(labels = scales::percent) +
+  theme_minimal()
 
-# 2. Drawdown Control (Stop-loss simulation)
-stop_loss_level <- -0.10  # 10% stop-loss
-controlled_returns <- ifelse(data$strategy_return < stop_loss_level, 
-                             stop_loss_level, 
-                             data$strategy_return)
+# Print results and plots
+cat("PART 1: Strategy vs Benchmark Analysis\n")
+cat("Maximum Strategy Drawdown:", round(min(data1$strategy_drawdown)*100, 2), "%\n")
+cat("Maximum Benchmark Drawdown:", round(min(data1$benchmark_drawdown)*100, 2), "%\n")
+# print(hwm_plot1 + drawdown_plot1 + plot_layout(ncol = 2))
 
-# 3. Value at Risk (VaR) Calculation
-calculate_var <- function(returns, confidence = 0.95) {
-  sorted_returns <- sort(returns)
-  var_index <- floor(length(sorted_returns) * (1 - confidence))
-  return(sorted_returns[var_index])
-}
+print(hwm_plot1)
+ggsave("part1_hwm.png", hwm_plot1, width = 12, height = 6)
 
-# Historical VaR
-var_95_strategy <- calculate_var(data$strategy_return)
-var_95_benchmark <- calculate_var(data$ret_benchmark)
+print(drawdown_plot1)
+ggsave("part1_dd.png", drawdown_plot1, width = 12, height = 6)
+ggsave("part1_hwm_dd.png", hwm_plot1 + drawdown_plot1 + plot_layout(nrow = 2), width = 12, height = 8)
 
-cat("\n95% Historical VaR (Strategy):", round(var_95_strategy*100, 2), "%\n")
-cat("95% Historical VaR (Benchmark):", round(var_95_benchmark*100, 2), "%\n")
+### PART 2: Different Frequencies Analysis ###
+data2 <- read_csv("net_returns_months.csv") %>% mutate(date = as.Date(date))
 
-# Parametric VaR (assuming normal distribution)
-parametric_var <- function(returns, confidence = 0.95) {
-  mu <- mean(returns)
-  sigma <- sd(returns)
-  q <- qnorm(1 - confidence)
-  return(mu + q * sigma)
-}
+# Create plots for each frequency
+freq_plots <- map(c(1, 3, 6, 12), ~{
+  freq_data <- data2 %>% filter(freq == .x)
+  freq_data <- freq_data %>%
+    mutate(
+      hwm = cummax(cum_net_return + 1),  # Calculate HWM from cumulative returns
+      value = cum_net_return + 1,        # Convert to growth factors
+      drawdown = (value - hwm)/hwm       # Calculate drawdown
+    )
+  
+  hwm_plot <- ggplot(freq_data, aes(x = date)) +
+    geom_line(aes(y = hwm, color = "HWM"), linetype = "dashed") +
+    geom_line(aes(y = value, color = "Value")) +
+    labs(title = paste(.x, "Month HWM"), y = "Value") +
+    theme_minimal()
+  
+  dd_plot <- ggplot(freq_data, aes(x = date, y = drawdown)) +
+    geom_line(color = "steelblue", linewidth = 1) +
+    labs(title = paste(.x, "Month Drawdown"), y = "Drawdown") +
+    scale_y_continuous(labels = scales::percent) +
+    theme_minimal()
+  
+  hwm_plot + dd_plot + plot_layout(ncol = 2)
+})
 
-var_parametric_strategy <- parametric_var(data$strategy_return)
-var_parametric_benchmark <- parametric_var(data$ret_benchmark)
-
-cat("\n95% Parametric VaR (Strategy):", round(var_parametric_strategy*100, 2), "%\n")
-cat("95% Parametric VaR (Benchmark):", round(var_parametric_benchmark*100, 2), "%\n")
-
-
-
-# risk for different month frequency
-
-# Load data
-data <- read_csv("net_returns_months.csv") %>%
-  mutate(date = as.Date(date))
-
-# Calculate drawdown from cumulative returns
-calculate_drawdown <- function(cum_returns) {
-  peak <- cummax(cum_returns)
-  drawdown <- (cum_returns - peak) / (1 + peak)
-  return(drawdown)
-}
-
-# Calculate VaR (95%) from cumulative returns
-calculate_var <- function(cum_returns, window) {
-  periodic_returns <- diff(cum_returns) / (1 + lag(cum_returns, default = first(cum_returns)))
-  rollapply(periodic_returns, width = window, 
-            FUN = function(x) quantile(x, probs = 0.05, na.rm = TRUE), 
-            fill = NA, align = "right")
-}
-
-# Process each frequency group
-risk_metrics <- data %>%
+# Calculate risk metrics for each frequency
+risk_metrics <- data2 %>%
   group_by(freq) %>%
   summarise(
-    max_drawdown = min(calculate_drawdown(cum_net_return), na.rm = TRUE),
-    avg_var = mean(calculate_var(cum_net_return, first(freq)), na.rm = TRUE)
+    max_drawdown = min((cum_net_return + 1 - cummax(cum_net_return + 1))/cummax(cum_net_return + 1)),
+    avg_var = mean(rollapply(net_return, width = first(freq), 
+                             FUN = function(x) quantile(x, 0.05, na.rm = TRUE), 
+                             fill = NA, align = "right"), na.rm = TRUE)
   ) %>%
-  filter(freq %in% c(1, 3, 6, 12)) %>%  # Only keep standard frequencies
+  filter(freq %in% c(1, 3, 6, 12)) %>%
   mutate(across(c(max_drawdown, avg_var), ~ scales::percent(., accuracy = 0.01)))
 
-# Print results
-risk_metrics %>%
-  knitr::kable(col.names = c("Months", "Max Drawdown", "Avg VaR (95%)"),
-               align = "c")
+ggsave("part2_hwm_dd.png", wrap_plots(freq_plots, ncol = 1), width = 12, height = 8)
 
+# Print results and plots
+cat("\nPART 2: Different Frequencies Analysis\n")
+print(risk_metrics)
+print(wrap_plots(freq_plots, ncol = 1))
 
+# Print results and plots
+cat("\nPART 3: Weighting Methods Analysis\n")
 
-
-# risk for different weighting
 
 # Load data
 data <- read_csv("weighted_returns.csv") %>%
@@ -156,3 +155,72 @@ risk_results %>%
     align = "c",
     caption = "Risk Metrics Comparison"
   )
+
+
+# Create plotting data
+plot_data <- data %>%
+  mutate(
+    # Convert to growth factors (1 = 100%)
+    cum_ret_eq = cum_ret_eq + 1,
+    cum_ret_mkt = cum_ret_mkt + 1,
+    
+    # Calculate high water marks
+    hw_eq = cummax(cum_ret_eq),
+    hw_mkt = cummax(cum_ret_mkt),
+    
+    # Calculate drawdowns
+    drawdown_eq = cum_ret_eq / hw_eq - 1,
+    drawdown_mkt = cum_ret_mkt / hw_mkt - 1
+  )
+
+# Function to create strategy plots
+create_strategy_plot <- function(strategy) {
+  
+  if (strategy == "eq") {
+    title <- "Equal-Weighted Strategy"
+    color <- "#1f77b4"  # Blue
+  } else {
+    title <- "Market-Weighted Strategy"
+    color <- "#ff7f0e"  # Orange
+  }
+  
+  # High water mark plot
+  hw_plot <- ggplot(plot_data, aes(x = date)) +
+    geom_line(aes(y = get(paste0("cum_ret_", strategy))), 
+              color = color, linewidth = 0.8) +
+    geom_line(aes(y = get(paste0("hw_", strategy))), 
+              color = "darkred", linetype = "dashed", linewidth = 0.6) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    labs(title = title, y = "Cumulative Return", x = "") +
+    theme_minimal() +
+    theme(plot.title = element_text(size = 10, face = "bold"))
+  
+  # Drawdown plot
+  dd_plot <- ggplot(plot_data, aes(x = date, y = get(paste0("drawdown_", strategy)))) +
+    geom_area(fill = color, alpha = 0.5) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    labs(y = "Drawdown", x = "Date") +
+    theme_minimal()
+  
+  # Combine plots
+  hw_plot / dd_plot + plot_layout(heights = c(2, 1))
+}
+
+# Create plots for both strategies
+eq_plot <- create_strategy_plot("eq")
+mkt_plot <- create_strategy_plot("mkt")
+
+# Combine into two-column layout
+combined_plots <- (eq_plot | mkt_plot) + 
+  plot_annotation(
+    title = "Risk Profile: High Water Marks and Drawdowns",
+    subtitle = "Comparison between equal-weighted and market-weighted strategies",
+    theme = theme(plot.title = element_text(size = 12, face = "bold"),
+                  plot.subtitle = element_text(size = 10))
+  )
+
+# Display the combined plots
+print(combined_plots)
+ggsave("part3_hwm_dd.png", combined_plots, width = 12, height = 8)
+
+
